@@ -1,15 +1,36 @@
-//
-//  main.cpp
-//  CV Lab 2
-//
-//  Created by Conor Taylor on 17/10/2015.
-//  Copyright © 2015 Conor Taylor. All rights reserved.
-//
+#include <opencv2/imgcodecs.hpp>
+#include <opencv2/videoio/videoio.hpp>
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
 
 #include <iostream>
+#include <stdio.h>
 
-int main(int argc, const char * argv[]) {
-	// insert code here...
-	std::cout << "Hello, World!\n";
-    return 0;
+using namespace cv;
+using namespace std;
+
+Mat getGrayscale(Mat img) {
+	Mat gray;
+	cvtColor(img, gray, CV_BGR2GRAY);
+	return gray;
+}
+
+int main(int argc, char* argv[]) {
+	
+	if (argc < 1) {
+		cout << "Usage: " << argv[0]
+			<< " [image 1] [image 2] [image n]" << endl;
+	}
+		
+	for (int i = 1; i < argc; i++) {
+		Mat img = imread(argv[i]);
+		Mat greyImg = getGrayscale(img);
+		
+		stringstream sstream;
+		sstream << "Image " << i;
+		imshow(sstream.str(), greyImg);
+	}
+	
+	waitKey(0);
+	return 0;
 }
