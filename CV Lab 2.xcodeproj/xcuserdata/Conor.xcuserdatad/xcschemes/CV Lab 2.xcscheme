@@ -61,6 +61,32 @@
             ReferencedContainer = "container:CV Lab 2.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
+      <CommandLineArguments>
+         <CommandLineArgument
+            argument = "/Users/Conor/Documents/College/CS4053/lab2/CV\ Lab\ 2/CV\ Lab\ 2/images/Glue1.jpg"
+            isEnabled = "YES">
+         </CommandLineArgument>
+         <CommandLineArgument
+            argument = "/Users/Conor/Documents/College/CS4053/lab2/CV\ Lab\ 2/CV\ Lab\ 2/images/Glue2.jpg"
+            isEnabled = "YES">
+         </CommandLineArgument>
+         <CommandLineArgument
+            argument = "/Users/Conor/Documents/College/CS4053/lab2/CV\ Lab\ 2/CV\ Lab\ 2/images/Glue3.jpg"
+            isEnabled = "YES">
+         </CommandLineArgument>
+         <CommandLineArgument
+            argument = "/Users/Conor/Documents/College/CS4053/lab2/CV\ Lab\ 2/CV\ Lab\ 2/images/Glue4.jpg"
+            isEnabled = "YES">
+         </CommandLineArgument>
+         <CommandLineArgument
+            argument = "/Users/Conor/Documents/College/CS4053/lab2/CV\ Lab\ 2/CV\ Lab\ 2/images/Glue5.jpg"
+            isEnabled = "YES">
+         </CommandLineArgument>
+         <CommandLineArgument
+            argument = "/Users/Conor/Documents/College/CS4053/lab2/CV\ Lab\ 2/CV\ Lab\ 2/images/Glue6.jpg"
+            isEnabled = "YES">
+         </CommandLineArgument>
+      </CommandLineArguments>
       <AdditionalOptions>
       </AdditionalOptions>
    </LaunchAction>
