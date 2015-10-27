@@ -162,7 +162,6 @@ int main(int argc, char* argv[]) {
 		
 		// show the bottles with rectangles drawn around bottles with no labels
 		for (int i = 0; i < no_label.size(); i++) {
-			cout << no_label[i] << endl;
 			rectangle(img, no_label[i], Scalar(0,0,255), 5, 8);
 		}
 		imshow(argv[i], img);
