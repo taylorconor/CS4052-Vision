@@ -14,74 +14,13 @@ using namespace std;
 #define PAGEIMG		"Page"
 #define PAGEAMT		13
 
-Mat easyCalcHist(Mat img) {
-	Mat hist;
-	int bins = 4;
-	int histSize[] = {bins, bins, bins};
-	float r[] = {0, 255};
-	const float* ranges[] = {r, r, r};
-	int channels[] = {0, 1, 2};
-	
-	calcHist(&img, 1, channels, Mat(), hist, 3, histSize, ranges);
-	
-	return hist;
-}
-
-Mat easyCalcBackProject(Mat img, Mat hist) {
-	Mat backProject;
-	float branges[] = {0, 255}, granges[] = {0, 255}, rranges[] = {0, 255};
-	const float* ranges[] = {branges, granges, rranges};
-	int channels[] = {0, 1, 2};
-	
-	calcBackProject(&img, 1, channels, hist, backProject, ranges, 255);
-	return backProject;
-}
-
-CvRect cropBlackBorder(Mat img) {
-	int startx = -1, endx = -1, starty = -1, endy = -1;
-	for (int i = 0; i < img.cols; i++) {
-		for (int j = 0; j < img.rows; j++) {
-			uchar pval = img.at<uchar>(j,i);
-			if (pval > 0) {
-				if (startx == -1)
-					startx = i;
-				if (starty == -1 || starty > j)
-					starty = j;
-				if (j > endy)
-					endy = j;
-				if (i > endx)
-					endx = i;
-			}
-		}
-	}
-	
-	// add 10px padding on each side, if possible
-	if (startx >= 10)
-		startx -= 10;
-	if (starty >= 10)
-		starty -= 10;
-	if (endx <= img.cols-10)
-		endx += 10;
-	if (endy <= img.rows-10)
-		endy += 10;
-	
-	CvRect rect(startx, starty, endx-startx, endy-starty);
-	return rect;
-}
-
-Mat findBlueDots(Mat img) {
-	Vec3b black = {0,0,0};
-	for (int i = 0; i < img.cols; i++) {
-		for (int j = 0; j < img.rows; j++) {
-			Vec3b pixel = img.at<Vec3b>(Point(i,j));
-			if (pixel[0] < (pixel[1]+pixel[2])*0.85) {
-				img.at<Vec3b>(Point(i,j)) = black;
-			}
-		}
-	}
-	return img;
-}
-
+/**
+ find the coordinates of the four corners of a noiseless binary image
+ 
+ @param img noiseless binary input image
+ 
+ @return a vector of Points of the corner coordinates (in no particular order)
+ */
 vector<Point> findCornerPoints(Mat img) {
 	vector<Point> v;
 	Point right, bottom, top;
@@ -115,56 +54,28 @@ vector<Point> findCornerPoints(Mat img) {
 	return v;
 }
 
-/*int main(int argc, char* argv[]) {
-	
-	if (argc < 1) {
-		cout << "Usage: " << argv[0] << " [img dir]" << endl;
-		return 0;
+// perform a simple closing
+Mat closing(Mat img, int amt=1) {
+	Mat tmp = img.clone();
+	for (int i = 0; i < amt; i++) {
+		dilate(tmp, tmp, Mat());
+		erode(tmp, tmp, Mat());
 	}
-	
-	string dir = argv[1];
-	Mat bluePixels = imread(dir+"/BlueBookPixelsNew2.png");
-	cvtColor(bluePixels, bluePixels, CV_BGR2HLS);
-	Mat blueHist = easyCalcHist(bluePixels);
-	
-	for (int i = 1; i <= BOOKAMT; i++) {
-		string s = dir+"/"+BOOKIMG+to_string(i)+".jpg";
-		Mat img = imread(s);
-		Mat binary, backProject, eroded, gray, hls;
-		cvtColor(img, hls, CV_BGR2HLS);
-		cvtColor(img, gray, CV_BGR2GRAY);
-		
-		// find the minimum bounding box of the book (to make back projection
-		// less noise-prone).
-		threshold(gray, binary, 165, 255, THRESH_BINARY);
-		erode(binary, eroded, Mat());
-		erode(eroded, eroded, Mat());
-		//CvRect crop = cropBlackBorder(eroded);
-		
-		backProject = easyCalcBackProject(hls, blueHist);
-		threshold(backProject, backProject, 10, 255, THRESH_BINARY);
-		
-		vector<Point> corners = findCornerPoints(backProject);
-		cvtColor(backProject, backProject, CV_GRAY2BGR);
-		for (int i = 0; i < corners.size(); i++) {
-			circle(backProject, corners[i], 3, Scalar(0,0,255));
-		}
-		
-		imshow(s, backProject);
-		
-		waitKey(0);
-	}
-	
-	// quit program on keypress
-	waitKey(0);
-	return 0;
-}*/
-
-Mat closing(Mat img) {
-	Mat tmp;
-	dilate(img, tmp, Mat());
-	erode(tmp, tmp, Mat());
 	return tmp;
+}
+
+// perform a simple erosion
+Mat erosion(Mat img, int amt=1) {
+	for (int i = 0; i < amt; i++)
+		erode(img, img, Mat());
+	return img;
+}
+
+// perform a simple dilation
+Mat dilate(Mat img, int amt=1) {
+	for (int i = 0; i < amt; i++)
+		dilate(img, img, Mat());
+	return img;
 }
 
 int main(int argc, char* argv[]) {
@@ -177,42 +88,46 @@ int main(int argc, char* argv[]) {
 	string dir = argv[1];
 	Mat bluePixels = imread(dir+"/BlueBookPixelsNew.png");
 	
+	// calculate histogram of blue pixels for back projection
 	cvtColor(bluePixels, bluePixels, CV_BGR2HLS);
 	ColourHistogram h = ColourHistogram(bluePixels, 4);
 	
 	for (int i = 1; i <= BOOKAMT; i++) {
 		string s = dir+"/"+BOOKIMG+to_string(i)+".jpg";
 		Mat img = imread(s);
-		resize(img, img, Size(), 4, 4);
-		Mat binary, backProject, eroded, dilated, gray, hls, mask, masked;
-		cvtColor(img, hls, CV_BGR2HLS);
-		cvtColor(img, gray, CV_BGR2GRAY);
 		
+		// blow up the image 4x to make back projection calculations more
+		// effective
+		resize(img, img, Size(), 4, 4);
+		Mat binary, backProject, eroded, dilated, hls, mask, masked;
+		cvtColor(img, hls, CV_BGR2HLS);
+		
+		// build a mask to remove everything that's not part of the page. this
+		// is most effectively achieved by thresholding the red channel and
+		// performing a series of closings, followed my erosions to remove noise
 		vector<Mat> spl;
 		split(img, spl);
 		threshold(spl[0], binary, 0, 255, THRESH_BINARY|THRESH_OTSU);
-		binary = closing(binary);
-		binary = closing(binary);
-		binary = closing(binary);
-		erode(binary, binary, Mat());
-		erode(binary, binary, Mat());
-		erode(binary, mask, Mat());
+		binary = closing(binary, 3);
+		mask = erosion(binary, 3);
 		
+		// apply the mask to the image
 		img.copyTo(masked, mask);
 		cvtColor(masked, masked, CV_BGR2HLS);
-		backProject = h.BackProject(masked);
-		dilate(backProject, backProject, Mat());
-		dilate(backProject, backProject, Mat());
-		dilate(backProject, backProject, Mat());
+		
+		// back project blue pixels
+		backProject = dilate(h.BackProject(masked), 3);
+		
+		// reduce image back to original size
 		resize(backProject, backProject, Size(), 0.25, 0.25);
 
+		// find the four corner points in the back projected image
 		vector<Point> corners = findCornerPoints(backProject);
 		cvtColor(backProject, backProject, CV_GRAY2BGR);
 		for (int i = 0; i < corners.size(); i++) {
 			circle(backProject, corners[i], 3, Scalar(0,0,255));
 		}
 		
-		//resize(masked, masked, Size(), 0.25, 0.25);
 		imshow(s, backProject);
 		
 		waitKey(0);
