@@ -160,6 +160,13 @@ vector<Point> findCornerPoints(Mat img) {
 	return 0;
 }*/
 
+Mat closing(Mat img) {
+	Mat tmp;
+	dilate(img, tmp, Mat());
+	erode(tmp, tmp, Mat());
+	return tmp;
+}
+
 int main(int argc, char* argv[]) {
 	
 	if (argc < 1) {
@@ -169,25 +176,43 @@ int main(int argc, char* argv[]) {
 	
 	string dir = argv[1];
 	Mat bluePixels = imread(dir+"/BlueBookPixelsNew.png");
+	
 	cvtColor(bluePixels, bluePixels, CV_BGR2HLS);
-	ColourHistogram h = ColourHistogram(bluePixels, 5);
+	ColourHistogram h = ColourHistogram(bluePixels, 4);
 	
 	for (int i = 1; i <= BOOKAMT; i++) {
 		string s = dir+"/"+BOOKIMG+to_string(i)+".jpg";
 		Mat img = imread(s);
-		Mat binary, backProject, eroded, gray, hls;
+		resize(img, img, Size(), 4, 4);
+		Mat binary, backProject, eroded, dilated, gray, hls, mask, masked;
 		cvtColor(img, hls, CV_BGR2HLS);
 		cvtColor(img, gray, CV_BGR2GRAY);
 		
-		// find the minimum bounding box of the book (to make back projection
-		// less noise-prone).
-		threshold(gray, binary, 165, 255, THRESH_BINARY);
-		erode(binary, eroded, Mat());
-		erode(eroded, eroded, Mat());
-		CvRect crop = cropBlackBorder(eroded);
-		Mat cropped = hls(crop);
+		vector<Mat> spl;
+		split(img, spl);
+		threshold(spl[0], binary, 0, 255, THRESH_BINARY|THRESH_OTSU);
+		binary = closing(binary);
+		binary = closing(binary);
+		binary = closing(binary);
+		erode(binary, binary, Mat());
+		erode(binary, binary, Mat());
+		erode(binary, mask, Mat());
 		
-		backProject = h.BackProject(cropped);
+		img.copyTo(masked, mask);
+		cvtColor(masked, masked, CV_BGR2HLS);
+		backProject = h.BackProject(masked);
+		dilate(backProject, backProject, Mat());
+		dilate(backProject, backProject, Mat());
+		dilate(backProject, backProject, Mat());
+		resize(backProject, backProject, Size(), 0.25, 0.25);
+
+		vector<Point> corners = findCornerPoints(backProject);
+		cvtColor(backProject, backProject, CV_GRAY2BGR);
+		for (int i = 0; i < corners.size(); i++) {
+			circle(backProject, corners[i], 3, Scalar(0,0,255));
+		}
+		
+		//resize(masked, masked, Size(), 0.25, 0.25);
 		imshow(s, backProject);
 		
 		waitKey(0);
