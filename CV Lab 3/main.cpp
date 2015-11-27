@@ -116,6 +116,90 @@ Mat dilate(Mat img, int amt=1) {
 	return img;
 }
 
+Mat processImageToPage(Mat img, ColourHistogram h) {
+	// blow up the image 4x to make back projection calculations more
+	// effective
+	resize(img, img, Size(), 4, 4);
+	Mat binary, backProject, eroded, dilated, hls, mask, masked, transformed;
+	cvtColor(img, hls, CV_BGR2HLS);
+	
+	// build a mask to remove everything that's not part of the page. this
+	// is most effectively achieved by thresholding the red channel and
+	// performing a series of closings, followed my erosions to remove noise
+	vector<Mat> spl;
+	split(img, spl);
+	threshold(spl[0], binary, 0, 255, THRESH_BINARY|THRESH_OTSU);
+	binary = closing(binary, 3);
+	mask = erosion(binary, 3);
+	
+	// apply the mask to the image
+	img.copyTo(masked, mask);
+	cvtColor(masked, masked, CV_BGR2HLS);
+	
+	// back project blue pixels
+	backProject = dilate(h.BackProject(masked), 3);
+	
+	// reduce image back to original size
+	resize(img, img, Size(), 0.25, 0.25);
+	resize(backProject, backProject, Size(), 0.25, 0.25);
+	
+	// find the four corner points in the back projected image
+	Corners corners = findCornerPoints(backProject);
+	/*cvtColor(backProject, backProject, CV_GRAY2BGR);
+	circle(backProject, corners.bottom_left, 3, Scalar(255, 255, 255));
+	circle(backProject, corners.top_left, 3, Scalar(0, 0, 255));
+	circle(backProject, corners.top_right, 3, Scalar(0, 255, 0));
+	circle(backProject, corners.bottom_right, 3, Scalar(255, 0, 0));*/
+	
+	return transformToRectangle(img, corners);
+}
+
+vector<Mat> getTemplateImages(string dir, ColourHistogram h) {
+	vector<Mat> v;
+	for (int i = 1; i <= PAGEAMT; i++) {
+		string s = dir+"/"+PAGEIMG+to_string(i)+".JPG";
+		Mat img = imread(s);
+		resize(img, img, Size(PAGEWIDTH, PAGEHEIGHT));
+		img.convertTo(img, CV_32F);
+		v.push_back(img);
+	}
+	return v;
+}
+
+int getMatchingImage(Mat img, vector<Mat>& templates) {
+	int result = 0;
+	double maxCorrelation = -1;
+	img.convertTo(img, CV_32F);
+	
+	for (int i = 0; i < templates.size(); i++) {
+		double c = abs(compareHist(img, templates[i], CV_COMP_INTERSECT));
+		cout << "coeff for " << i << ": " << c << endl;
+		if (c > maxCorrelation) {
+			maxCorrelation = c;
+			result = i;
+		}
+	}
+	return result;
+}
+
+Mat getDisplayImage(Mat img, int imgno, Mat t, int tempno) {
+	t.convertTo(t, CV_8U);
+	Size s1 = img.size();
+	Size s2 = t.size();
+	Mat result(s1.height, s1.width+s2.width, CV_8UC3);
+	Mat left(result, Rect(0, 0, s1.width, s1.height));
+	img.copyTo(left);
+	Mat right(result, Rect(s1.width, 0, s2.width, s2.height));
+	t.copyTo(right);
+	
+	putText(result, BOOKIMG+to_string(imgno), cvPoint(10,20),
+			FONT_HERSHEY_PLAIN, 1, cvScalar(0,0,250), 1, CV_AA);
+	putText(result, PAGEIMG+to_string(tempno), cvPoint(PAGEWIDTH+10,20),
+			FONT_HERSHEY_PLAIN, 1, cvScalar(0,0,250), 1, CV_AA);
+	
+	return result;
+}
+
 int main(int argc, char* argv[]) {
 	
 	if (argc < 1) {
@@ -130,46 +214,17 @@ int main(int argc, char* argv[]) {
 	cvtColor(bluePixels, bluePixels, CV_BGR2HLS);
 	ColourHistogram h = ColourHistogram(bluePixels, 4);
 	
+	vector<Mat> templates = getTemplateImages(dir, h);
+	
 	for (int i = 1; i <= BOOKAMT; i++) {
 		string s = dir+"/"+BOOKIMG+to_string(i)+".jpg";
 		Mat img = imread(s);
 		
-		// blow up the image 4x to make back projection calculations more
-		// effective
-		resize(img, img, Size(), 4, 4);
-		Mat binary, backProject, eroded, dilated, hls, mask, masked, transformed;
-		cvtColor(img, hls, CV_BGR2HLS);
+		Mat transformed = processImageToPage(img, h);
+		int match = getMatchingImage(transformed, templates);
 		
-		// build a mask to remove everything that's not part of the page. this
-		// is most effectively achieved by thresholding the red channel and
-		// performing a series of closings, followed my erosions to remove noise
-		vector<Mat> spl;
-		split(img, spl);
-		threshold(spl[0], binary, 0, 255, THRESH_BINARY|THRESH_OTSU);
-		binary = closing(binary, 3);
-		mask = erosion(binary, 3);
-		
-		// apply the mask to the image
-		img.copyTo(masked, mask);
-		cvtColor(masked, masked, CV_BGR2HLS);
-		
-		// back project blue pixels
-		backProject = dilate(h.BackProject(masked), 3);
-		
-		// reduce image back to original size
-		resize(img, img, Size(), 0.25, 0.25);
-		resize(backProject, backProject, Size(), 0.25, 0.25);
-
-		// find the four corner points in the back projected image
-		Corners corners = findCornerPoints(backProject);
-		/*cvtColor(backProject, backProject, CV_GRAY2BGR);
-		circle(backProject, corners.bottom_left, 3, Scalar(255, 255, 255));
-		circle(backProject, corners.top_left, 3, Scalar(0, 0, 255));
-		circle(backProject, corners.top_right, 3, Scalar(0, 255, 0));
-		circle(backProject, corners.bottom_right, 3, Scalar(255, 0, 0));*/
-		
-		transformed = transformToRectangle(img, corners);
-		imshow(s, transformed);
+		Mat display = getDisplayImage(transformed, i, templates[match], match);
+		imshow(s, display);
 		
 		waitKey(0);
 	}
