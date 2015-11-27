@@ -14,15 +14,34 @@ using namespace std;
 #define PAGEIMG		"Page"
 #define PAGEAMT		13
 
+#define PAGEWIDTH	350
+#define PAGEHEIGHT	513
+
+struct Corners {
+	Point top_left;
+	Point top_right;
+	Point bottom_left;
+	Point bottom_right;
+	
+	vector<Point2f> toVector() {
+		vector<Point2f> p;
+		p.push_back(top_left);
+		p.push_back(top_right);
+		p.push_back(bottom_right);
+		p.push_back(bottom_left);
+		return p;
+	}
+};
+
 /**
  find the coordinates of the four corners of a noiseless binary image
  
  @param img noiseless binary input image
  
- @return a vector of Points of the corner coordinates (in no particular order)
+ @return a Corners object identifying the coordinates of each corner
  */
-vector<Point> findCornerPoints(Mat img) {
-	vector<Point> v;
+Corners findCornerPoints(Mat img) {
+	Corners c;
 	Point right, bottom, top;
 	int startx = -1, endx = -1, starty = -1, endy = -1;
 	for (int i = 0; i < img.cols; i++) {
@@ -30,7 +49,7 @@ vector<Point> findCornerPoints(Mat img) {
 			uchar pval = img.at<uchar>(j,i);
 			if (pval > 0) {
 				if (startx == -1) {
-					v.push_back(Point(i,j));
+					c.bottom_left = Point(i,j);
 					startx = i;
 				}
 				if (starty == -1 || starty > j) {
@@ -48,10 +67,29 @@ vector<Point> findCornerPoints(Mat img) {
 			}
 		}
 	}
-	v.push_back(bottom);
-	v.push_back(right);
-	v.push_back(top);
-	return v;
+	c.bottom_right = bottom;
+	c.top_right = right;
+	c.top_left = top;
+	return c;
+}
+
+Mat transformToRectangle(Mat img, Corners c) {
+	// Define the destination image
+	cv::Mat quad = cv::Mat::zeros(PAGEHEIGHT, PAGEWIDTH, CV_8UC3);
+	
+	// Corners of the destination image
+	std::vector<cv::Point2f> quad_pts;
+	quad_pts.push_back(cv::Point2f(0, 0));
+	quad_pts.push_back(cv::Point2f(quad.cols, 0));
+	quad_pts.push_back(cv::Point2f(quad.cols, quad.rows));
+	quad_pts.push_back(cv::Point2f(0, quad.rows));
+	
+	// Get transformation matrix
+	cv::Mat transmtx = cv::getPerspectiveTransform(c.toVector(), quad_pts);
+	
+	// Apply perspective transformation
+	cv::warpPerspective(img, quad, transmtx, quad.size());
+	return quad;
 }
 
 // perform a simple closing
@@ -99,7 +137,7 @@ int main(int argc, char* argv[]) {
 		// blow up the image 4x to make back projection calculations more
 		// effective
 		resize(img, img, Size(), 4, 4);
-		Mat binary, backProject, eroded, dilated, hls, mask, masked;
+		Mat binary, backProject, eroded, dilated, hls, mask, masked, transformed;
 		cvtColor(img, hls, CV_BGR2HLS);
 		
 		// build a mask to remove everything that's not part of the page. this
@@ -119,16 +157,19 @@ int main(int argc, char* argv[]) {
 		backProject = dilate(h.BackProject(masked), 3);
 		
 		// reduce image back to original size
+		resize(img, img, Size(), 0.25, 0.25);
 		resize(backProject, backProject, Size(), 0.25, 0.25);
 
 		// find the four corner points in the back projected image
-		vector<Point> corners = findCornerPoints(backProject);
-		cvtColor(backProject, backProject, CV_GRAY2BGR);
-		for (int i = 0; i < corners.size(); i++) {
-			circle(backProject, corners[i], 3, Scalar(0,0,255));
-		}
+		Corners corners = findCornerPoints(backProject);
+		/*cvtColor(backProject, backProject, CV_GRAY2BGR);
+		circle(backProject, corners.bottom_left, 3, Scalar(255, 255, 255));
+		circle(backProject, corners.top_left, 3, Scalar(0, 0, 255));
+		circle(backProject, corners.top_right, 3, Scalar(0, 255, 0));
+		circle(backProject, corners.bottom_right, 3, Scalar(255, 0, 0));*/
 		
-		imshow(s, backProject);
+		transformed = transformToRectangle(img, corners);
+		imshow(s, transformed);
 		
 		waitKey(0);
 	}
