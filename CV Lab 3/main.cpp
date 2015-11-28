@@ -25,10 +25,10 @@ struct Corners {
 	
 	vector<Point2f> toVector() {
 		vector<Point2f> p;
-		p.push_back(top_left);
-		p.push_back(top_right);
-		p.push_back(bottom_right);
-		p.push_back(bottom_left);
+		p.push_back(Point(top_left.x, top_left.y-2));
+		p.push_back(Point(top_right.x+5, top_right.y));
+		p.push_back(Point(bottom_right.x+5, bottom_right.y+5));
+		p.push_back(Point(bottom_left.x-5, bottom_left.y+2));
 		return p;
 	}
 };
@@ -160,15 +160,16 @@ vector<pair<Mat, Mat>> getTemplateImages(string dir, ColourHistogram h) {
 		string s = dir+"/"+PAGEIMG+to_string(i)+".JPG";
 		Mat img = imread(s);
 		resize(img, img, Size(PAGEWIDTH, PAGEHEIGHT));
-		//img.convertTo(img, CV_32F);
 		
 		pair<Mat, Mat> p;
+		GaussianBlur(img, img, Size(3,3), 10);
 		p.first = img;
 
 		Mat edge;
-		Canny(img, edge, 80, 150, 3);
-		edge.convertTo(edge, CV_32F);
-		p.second = edge;
+		Canny(img, edge, 100, 200);
+		// crop out the blue points/lines
+		Rect r = Rect(20, 20, edge.cols - 40, edge.rows - 40);
+		p.second = edge(r);
 		
 		v.push_back(p);
 	}
@@ -180,24 +181,26 @@ int getMatchingImage(Mat img, vector<pair<Mat, Mat>>& templates) {
 	double global_max_correlation = -1;
 	
 	Mat edge;
-	Canny(img, edge, 80, 150, 3);
+	cvtColor(img, img, CV_BGR2GRAY);
+	Canny(img, edge, 50, 15);
 	
-	Mat correlation_img;
+	Mat correlation_img, test;
 	double min_correlation, max_correlation;
 	
 	for (int i = 0; i < templates.size(); i++) {
-		matchTemplate(img, templates[i].first, correlation_img, CV_TM_CCORR_NORMED);
+		matchTemplate(edge, templates[i].second, correlation_img, CV_TM_CCORR_NORMED);
 		minMaxLoc(correlation_img, &min_correlation, &max_correlation);
 		if (max_correlation > global_max_correlation) {
 			global_max_correlation = max_correlation;
 			result = i;
 		}
 	}
+	imshow("src", edge);
+	imshow("template", templates[result].second);
 	return result;
 }
 
 Mat getDisplayImage(Mat img, int imgno, Mat t, int tempno) {
-	t.convertTo(t, CV_8U);
 	Size s1 = img.size();
 	Size s2 = t.size();
 	Mat result(s1.height, s1.width+s2.width, CV_8UC3);
@@ -207,9 +210,9 @@ Mat getDisplayImage(Mat img, int imgno, Mat t, int tempno) {
 	t.copyTo(right);
 	
 	putText(result, BOOKIMG+to_string(imgno), cvPoint(10,20),
-			FONT_HERSHEY_PLAIN, 1, cvScalar(0,0,250), 1, CV_AA);
+			FONT_HERSHEY_PLAIN, 1, cvScalar(0,0,250), 1, CV_8UC3);
 	putText(result, PAGEIMG+to_string(tempno), cvPoint(PAGEWIDTH+10,20),
-			FONT_HERSHEY_PLAIN, 1, cvScalar(0,0,250), 1, CV_AA);
+			FONT_HERSHEY_PLAIN, 1, cvScalar(0,0,250), 1, CV_8UC3);
 	
 	return result;
 }
