@@ -154,28 +154,42 @@ Mat processImageToPage(Mat img, ColourHistogram h) {
 	return transformToRectangle(img, corners);
 }
 
-vector<Mat> getTemplateImages(string dir, ColourHistogram h) {
-	vector<Mat> v;
+vector<pair<Mat, Mat>> getTemplateImages(string dir, ColourHistogram h) {
+	vector<pair<Mat, Mat>> v;
 	for (int i = 1; i <= PAGEAMT; i++) {
 		string s = dir+"/"+PAGEIMG+to_string(i)+".JPG";
 		Mat img = imread(s);
 		resize(img, img, Size(PAGEWIDTH, PAGEHEIGHT));
-		img.convertTo(img, CV_32F);
-		v.push_back(img);
+		//img.convertTo(img, CV_32F);
+		
+		pair<Mat, Mat> p;
+		p.first = img;
+
+		Mat edge;
+		Canny(img, edge, 80, 150, 3);
+		edge.convertTo(edge, CV_32F);
+		p.second = edge;
+		
+		v.push_back(p);
 	}
 	return v;
 }
 
-int getMatchingImage(Mat img, vector<Mat>& templates) {
+int getMatchingImage(Mat img, vector<pair<Mat, Mat>>& templates) {
 	int result = 0;
-	double maxCorrelation = -1;
-	img.convertTo(img, CV_32F);
+	double global_max_correlation = -1;
+	
+	Mat edge;
+	Canny(img, edge, 80, 150, 3);
+	
+	Mat correlation_img;
+	double min_correlation, max_correlation;
 	
 	for (int i = 0; i < templates.size(); i++) {
-		double c = abs(compareHist(img, templates[i], CV_COMP_INTERSECT));
-		cout << "coeff for " << i << ": " << c << endl;
-		if (c > maxCorrelation) {
-			maxCorrelation = c;
+		matchTemplate(img, templates[i].first, correlation_img, CV_TM_CCORR_NORMED);
+		minMaxLoc(correlation_img, &min_correlation, &max_correlation);
+		if (max_correlation > global_max_correlation) {
+			global_max_correlation = max_correlation;
 			result = i;
 		}
 	}
@@ -214,7 +228,7 @@ int main(int argc, char* argv[]) {
 	cvtColor(bluePixels, bluePixels, CV_BGR2HLS);
 	ColourHistogram h = ColourHistogram(bluePixels, 4);
 	
-	vector<Mat> templates = getTemplateImages(dir, h);
+	vector<pair<Mat, Mat>> templates = getTemplateImages(dir, h);
 	
 	for (int i = 1; i <= BOOKAMT; i++) {
 		string s = dir+"/"+BOOKIMG+to_string(i)+".jpg";
@@ -223,7 +237,7 @@ int main(int argc, char* argv[]) {
 		Mat transformed = processImageToPage(img, h);
 		int match = getMatchingImage(transformed, templates);
 		
-		Mat display = getDisplayImage(transformed, i, templates[match], match);
+		Mat display = getDisplayImage(transformed, i, templates[match].first, match);
 		imshow(s, display);
 		
 		waitKey(0);
