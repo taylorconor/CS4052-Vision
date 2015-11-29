@@ -17,6 +17,7 @@ using namespace std;
 #define PAGEWIDTH	350
 #define PAGEHEIGHT	513
 
+// represents and identifies the corners found in the book image
 struct Corners {
 	Point top_left;
 	Point top_right;
@@ -73,23 +74,22 @@ Corners findCornerPoints(Mat img) {
 	return c;
 }
 
+// transform a book image to a rectangle using the provided corner points
 Mat transformToRectangle(Mat img, Corners c) {
-	// Define the destination image
-	cv::Mat quad = cv::Mat::zeros(PAGEHEIGHT, PAGEWIDTH, CV_8UC3);
+	cv::Mat result = cv::Mat::zeros(PAGEHEIGHT, PAGEWIDTH, CV_8UC3);
 	
-	// Corners of the destination image
 	std::vector<cv::Point2f> quad_pts;
 	quad_pts.push_back(cv::Point2f(0, 0));
-	quad_pts.push_back(cv::Point2f(quad.cols, 0));
-	quad_pts.push_back(cv::Point2f(quad.cols, quad.rows));
-	quad_pts.push_back(cv::Point2f(0, quad.rows));
+	quad_pts.push_back(cv::Point2f(result.cols, 0));
+	quad_pts.push_back(cv::Point2f(result.cols, result.rows));
+	quad_pts.push_back(cv::Point2f(0, result.rows));
 	
-	// Get transformation matrix
+	// transformation matrix
 	cv::Mat transmtx = cv::getPerspectiveTransform(c.toVector(), quad_pts);
 	
-	// Apply perspective transformation
-	cv::warpPerspective(img, quad, transmtx, quad.size());
-	return quad;
+	// apply perspective transformation
+	cv::warpPerspective(img, result, transmtx, result.size());
+	return result;
 }
 
 // perform a simple closing
@@ -116,6 +116,7 @@ Mat dilate(Mat img, int amt=1) {
 	return img;
 }
 
+// convert input image to book image
 Mat processImageToPage(Mat img, ColourHistogram h) {
 	// blow up the image 4x to make back projection calculations more
 	// effective
@@ -145,15 +146,17 @@ Mat processImageToPage(Mat img, ColourHistogram h) {
 	
 	// find the four corner points in the back projected image
 	Corners corners = findCornerPoints(backProject);
-	/*cvtColor(backProject, backProject, CV_GRAY2BGR);
-	circle(backProject, corners.bottom_left, 3, Scalar(255, 255, 255));
-	circle(backProject, corners.top_left, 3, Scalar(0, 0, 255));
-	circle(backProject, corners.top_right, 3, Scalar(0, 255, 0));
-	circle(backProject, corners.bottom_right, 3, Scalar(255, 0, 0));*/
+	cvtColor(backProject, backProject, CV_GRAY2BGR);
+	circle(backProject, corners.bottom_left, 3, Scalar(255, 255, 255), 10);
+	circle(backProject, corners.top_left, 3, Scalar(0, 0, 255), 10);
+	circle(backProject, corners.top_right, 3, Scalar(0, 255, 0), 10);
+	circle(backProject, corners.bottom_right, 3, Scalar(255, 0, 0), 10);
 	
 	return transformToRectangle(img, corners);
 }
 
+// returns a list of all of the template images, paired with an edge image
+// version so we don't have to compute the edges each time we try a match
 vector<pair<Mat, Mat>> getTemplateImages(string dir, ColourHistogram h) {
 	vector<pair<Mat, Mat>> v;
 	for (int i = 1; i <= PAGEAMT; i++) {
@@ -176,6 +179,7 @@ vector<pair<Mat, Mat>> getTemplateImages(string dir, ColourHistogram h) {
 	return v;
 }
 
+// find the index of the template image that matches the input image
 int getMatchingImage(Mat img, vector<pair<Mat, Mat>>& templates) {
 	int result = 0;
 	double global_max_correlation = -1;
@@ -188,7 +192,8 @@ int getMatchingImage(Mat img, vector<pair<Mat, Mat>>& templates) {
 	double min_correlation, max_correlation;
 	
 	for (int i = 0; i < templates.size(); i++) {
-		matchTemplate(edge, templates[i].second, correlation_img, CV_TM_CCORR_NORMED);
+		matchTemplate(edge, templates[i].second,
+					  correlation_img, CV_TM_CCORR_NORMED);
 		minMaxLoc(correlation_img, &min_correlation, &max_correlation);
 		if (max_correlation > global_max_correlation) {
 			global_max_correlation = max_correlation;
@@ -200,6 +205,7 @@ int getMatchingImage(Mat img, vector<pair<Mat, Mat>>& templates) {
 	return result;
 }
 
+// returns the two input images displayed side by side (for display only)
 Mat getDisplayImage(Mat img, int imgno, Mat t, int tempno) {
 	Size s1 = img.size();
 	Size s2 = t.size();
@@ -240,13 +246,12 @@ int main(int argc, char* argv[]) {
 		Mat transformed = processImageToPage(img, h);
 		int match = getMatchingImage(transformed, templates);
 		
-		Mat display = getDisplayImage(transformed, i, templates[match].first, match);
+		Mat display = getDisplayImage(transformed, i,
+									  templates[match].first, match);
+		// show the two images side by side
 		imshow(s, display);
-		
 		waitKey(0);
 	}
-	
-	// quit program on keypress
 	waitKey(0);
 	return 0;
 }
