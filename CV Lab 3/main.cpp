@@ -243,9 +243,12 @@ int main(int argc, char* argv[]) {
 		string s = dir+"/"+BOOKIMG+to_string(i)+".jpg";
 		Mat img = imread(s);
 		
+		// transform the book image to a page image
 		Mat transformed = processImageToPage(img, h);
+		// find the id of the template that matches the page image
 		int match = getMatchingImage(transformed, templates);
 		
+		// display the page image and the matching template side by side
 		Mat display = getDisplayImage(transformed, i,
 									  templates[match].first, match);
 		// show the two images side by side
